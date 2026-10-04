@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spider-web.dev/schemas/spider-session-1.0-draft.json",
+  "title": "Spider Session 1.0 draft",
+  "description": "Provider-neutral session state. Draft pending implementation fixtures.",
+  "type": "object",
+  "required": ["schema_version", "session", "objective", "state", "conversation", "tool_calls", "tool_results", "decisions", "files", "artifacts", "commands", "tests", "errors", "capture", "environment", "git", "next_action", "extensions"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "session": {
+      "type": "object",
+      "required": ["id", "created_at", "updated_at", "source_agent", "project"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^spw_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "source_agent": { "type": "string", "minLength": 1 },
+        "project": {
+          "type": "object",
+          "required": ["name", "root_hint"],
+          "properties": {
+            "name": { "type": ["string", "null"] },
+            "root_hint": { "type": ["string", "null"], "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).*$", "description": "Optional relative POSIX path only; absolute roots live in the local index." }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "objective": {
+      "type": "object",
+      "required": ["goal", "status"],
+      "properties": {
+        "goal": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["in_progress", "blocked", "completed", "unknown"] }
+      },
+      "additionalProperties": false
+    },
+    "state": {
+      "type": "object",
+      "required": ["current_task", "completed", "in_progress", "blocked"],
+      "properties": {
+        "current_task": { "type": ["string", "null"] },
+        "completed": { "type": "array", "items": { "$ref": "#/$defs/stateItem" } },
+        "in_progress": { "type": "array", "items": { "$ref": "#/$defs/stateItem" } },
+        "blocked": { "type": "array", "items": { "$ref": "#/$defs/stateItem" } }
+      },
+      "additionalProperties": false
+    },
+    "conversation": { "type": "array", "items": { "$ref": "#/$defs/message" } },
+    "tool_calls": { "type": "array", "items": { "$ref": "#/$defs/toolCall" } },
+    "tool_results": { "type": "array", "items": { "$ref": "#/$defs/toolResult" } },
+    "decisions": { "type": "array", "items": { "$ref": "#/$defs/evidencedItem" } },
+    "files": {
+      "type": "object",
+      "required": ["created", "modified", "deleted"],
+      "properties": {
+        "created": { "type": "array", "items": { "$ref": "#/$defs/fileClaim" } },
+        "modified": { "type": "array", "items": { "$ref": "#/$defs/fileClaim" } },
+        "deleted": { "type": "array", "items": { "$ref": "#/$defs/fileClaim" } }
+      },
+      "additionalProperties": false
+    },
+    "artifacts": { "type": "array", "items": { "$ref": "#/$defs/artifact" } },
+    "commands": { "type": "array", "items": { "$ref": "#/$defs/command" } },
+    "tests": { "type": "array", "items": { "$ref": "#/$defs/test" } },
+    "errors": { "type": "array", "items": { "$ref": "#/$defs/errorEvent" } },
+    "capture": {
+      "type": "object",
+      "required": ["omissions", "truncations"],
+      "properties": {
+        "omissions": { "type": "array", "items": { "type": "string" } },
+        "truncations": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "os_family": { "type": ["string", "null"] },
+        "os_version": { "type": ["string", "null"] },
+        "runtime": { "type": ["string", "null"] },
+        "runtime_version": { "type": ["string", "null"] },
+        "shell": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "git": {
+      "type": "object",
+      "required": ["branch", "head", "status", "files"],
+      "properties": {
+        "branch": { "type": ["string", "null"] },
+        "head": { "type": ["string", "null"] },
+        "status": { "enum": ["clean", "dirty", "unknown", null] },
+        "files": { "type": "array", "items": { "$ref": "#/$defs/gitFile" } }
+      },
+      "additionalProperties": false
+    },
+    "next_action": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/evidencedItem" }] },
+    "extensions": { "type": "object", "description": "Optional provider-scoped metadata keyed by adapter id; not required to understand session state.", "additionalProperties": true }
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "required": ["source", "confidence"],
+      "properties": {
+        "source": { "enum": ["transcript", "git", "user", "adapter-derived", "unknown"] },
+        "confidence": { "enum": ["observed", "inferred", "unknown"] },
+        "event_id": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "evidencedItem": {
+      "type": "object",
+      "required": ["description"],
+      "properties": {
+        "description": { "type": "string" },
+        "rationale": { "type": ["string", "null"] },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      },
+      "additionalProperties": false
+    },
+    "stateItem": { "$ref": "#/$defs/evidencedItem" },
+    "contentPart": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["text", "image_ref", "file_ref", "unavailable"] },
+        "text": { "type": "string" },
+        "artifact_id": { "type": "string" },
+        "note": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "message": {
+      "type": "object",
+      "required": ["id", "sequence", "role", "content"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^e[0-9a-z]+$" },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "role": { "enum": ["system", "developer", "user", "assistant", "other"] },
+        "content": { "type": "array", "items": { "$ref": "#/$defs/contentPart" } },
+        "timestamp": { "type": ["string", "null"], "format": "date-time" },
+        "handoff_relevant": { "type": "boolean" },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      },
+      "additionalProperties": false
+    },
+    "toolCall": {
+      "type": "object",
+      "required": ["id", "sequence", "name", "status"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^e[0-9a-z]+$" },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "name": { "type": "string" },
+        "input": {},
+        "status": { "enum": ["requested", "running", "completed", "failed", "unknown"] },
+        "timestamp": { "type": ["string", "null"], "format": "date-time" },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      },
+      "additionalProperties": false
+    },
+    "toolResult": {
+      "type": "object",
+      "required": ["id", "sequence", "tool_call_id", "status"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^e[0-9a-z]+$" },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "tool_call_id": { "type": "string" },
+        "status": { "enum": ["completed", "failed", "truncated", "unavailable", "unknown"] },
+        "output": { "type": ["string", "object", "array", "number", "boolean", "null"], "maxLength": 65536, "description": "Strings are additionally limited to 64 KiB UTF-8 bytes by the validator; larger values are artifact references or marked truncations." },
+        "timestamp": { "type": ["string", "null"], "format": "date-time" },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      },
+      "additionalProperties": false
+    },
+    "artifact": {
+      "type": "object",
+      "required": ["id", "kind", "sha256", "inclusion"],
+      "properties": {
+        "id": { "type": "string" },
+        "path": { "type": ["string", "null"], "minLength": 1, "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).*$", "description": "Relative POSIX source path; may be omitted to protect privacy." },
+        "kind": { "type": "string" },
+        "sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+        "inclusion": { "enum": ["included", "referenced", "omitted"] },
+        "entry_path": { "type": ["string", "null"], "pattern": "^artifacts/[0-9a-f]{64}$" },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      },
+      "additionalProperties": false
+    },
+    "fileClaim": {
+      "type": "object",
+      "required": ["path", "evidence"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).*$" },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      },
+      "additionalProperties": false
+    },
+    "gitFile": {
+      "type": "object",
+      "required": ["path", "index_status", "worktree_status"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).*$" },
+        "index_status": { "enum": ["added", "modified", "deleted", "renamed", "unmodified", "unknown"] },
+        "worktree_status": { "enum": ["modified", "deleted", "untracked", "unmodified", "unknown"] }
+      },
+      "additionalProperties": false
+    },
+    "command": {
+      "type": "object",
+      "required": ["id", "sequence", "command", "status", "evidence"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^e[0-9a-z]+$" },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "command": { "type": "string" },
+        "status": { "enum": ["succeeded", "failed", "running", "unknown"] },
+        "exit_code": { "type": ["integer", "null"] },
+        "output_artifact_id": { "type": ["string", "null"] },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      },
+      "additionalProperties": false
+    },
+    "test": {
+      "type": "object",
+      "required": ["id", "sequence", "name", "status", "evidence"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^e[0-9a-z]+$" },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "name": { "type": "string" },
+        "status": { "enum": ["passed", "failed", "skipped", "running", "unknown"] },
+        "details_artifact_id": { "type": ["string", "null"] },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      },
+      "additionalProperties": false
+    },
+    "errorEvent": {
+      "type": "object",
+      "required": ["id", "sequence", "description", "evidence"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^e[0-9a-z]+$" },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "description": { "type": "string" },
+        "evidence": { "$ref": "#/$defs/evidence" },
+        "artifact_id": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spider-web.dev/schemas/spider-egg-manifest-0.1.json",
+  "title": "Spider Egg manifest 0.1",
+  "type": "object",
+  "required": ["format", "format_version", "schema_version", "session_id", "required_features", "entries"],
+  "properties": {
+    "format": { "const": "spider-egg" },
+    "format_version": { "const": "0.1" },
+    "schema_version": { "const": "1.0" },
+    "session_id": { "type": "string", "pattern": "^spw_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "required_features": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+    "entries": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["path", "media_type", "size", "sha256"],
+        "properties": {
+          "path": { "type": "string", "pattern": "^(session\\.json|handoff\\.md|artifacts/[0-9a-f]{64})$" },
+          "media_type": { "type": "string" },
+          "size": { "type": "integer", "minimum": 0, "maximum": 268435456 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        },
+        "additionalProperties": false
+      },
+      "minItems": 2,
+      "maxItems": 1999,
+      "allOf": [
+        { "contains": { "type": "object", "properties": { "path": { "const": "session.json" } }, "required": ["path"] }, "minContains": 1 },
+        { "contains": { "type": "object", "properties": { "path": { "const": "handoff.md" } }, "required": ["path"] }, "minContains": 1 }
+      ]
+    }
+  },
+  "additionalProperties": false
+}
