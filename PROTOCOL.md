@@ -16,13 +16,23 @@ A single `session.json` stores the canonical session, including all available co
     "source_agent": "claude-code",
     "project": { "name": "service", "root_hint": "." }
   },
-  "objective": { "goal": "Fix refresh token handling", "status": "in_progress" },
+  "objective": {
+    "goal": "Fix refresh token handling",
+    "status": "in_progress"
+  },
   "state": {
     "current_task": "Trace refresh flow",
-    "completed": [], "in_progress": [], "blocked": []
+    "completed": [],
+    "in_progress": [],
+    "blocked": []
   },
   "conversation": [
-    { "id": "e1", "sequence": 1, "role": "user", "content": [{ "type": "text", "text": "…" }] }
+    {
+      "id": "e1",
+      "sequence": 1,
+      "role": "user",
+      "content": [{ "type": "text", "text": "…" }]
+    }
   ],
   "tool_calls": [],
   "tool_results": [],
@@ -35,7 +45,10 @@ A single `session.json` stores the canonical session, including all available co
   "capture": { "omissions": [], "truncations": [] },
   "environment": { "os_family": "windows", "runtime": "node", "shell": "pwsh" },
   "git": { "branch": null, "head": null, "status": "unknown", "files": [] },
-  "next_action": { "description": "Inspect token rotation", "evidence": { "source": "user", "confidence": "observed" } },
+  "next_action": {
+    "description": "Inspect token rotation",
+    "evidence": { "source": "user", "confidence": "observed" }
+  },
   "extensions": {}
 }
 ```
@@ -76,8 +89,18 @@ The manifest shape is validated by [spider-egg-manifest.schema.json](schemas/spi
   "session_id": "spw_…",
   "required_features": [],
   "entries": [
-    { "path": "handoff.md", "media_type": "text/markdown; charset=utf-8", "size": 1234, "sha256": "<64 lowercase hex>" },
-    { "path": "session.json", "media_type": "application/json", "size": 2345, "sha256": "<64 lowercase hex>" }
+    {
+      "path": "handoff.md",
+      "media_type": "text/markdown; charset=utf-8",
+      "size": 1234,
+      "sha256": "<64 lowercase hex>"
+    },
+    {
+      "path": "session.json",
+      "media_type": "application/json",
+      "size": 2345,
+      "sha256": "<64 lowercase hex>"
+    }
   ]
 }
 ```
@@ -90,9 +113,9 @@ The manifest is limited to 1 MiB. An Egg contains at most 2,000 entries includin
 
 Serialize JSON using RFC 8785 JSON Canonicalization Scheme (UTF-8, no BOM, no trailing newline); reject duplicate JSON member names before canonicalization. Markdown is UTF-8 without BOM with LF endings. ZIP entries are sorted by path, use the fixed DOS timestamp `1980-01-01T00:00:00`, fixed Unix host/version marker, regular-file mode `0644`, UTF-8 filename flag, no extra fields/comments/directories/data descriptors/ZIP64, and `ZIP_STORED` (no compression). Manifest has no generated-at or producer field. Thus identical canonical session and attachment bytes produce identical archive bytes. This prioritizes reproducibility over compressed size.
 
-### Validation and extraction
+### Validation and reading
 
-Reject absolute paths, `..`, backslashes, duplicate names, symlinks, encryption, compression methods other than STORED, malformed manifests, invalid sizes or hashes, more than 2,000 total ZIP entries (including the manifest), more than 256 MiB total expanded content, and unsupported major format versions or unrecognized required features. Validate archive metadata first, then stream entries into a private staging directory while checking actual sizes and SHA-256; atomically rename staging to the requested new, absent destination only after all checks pass. Clean up staging on failure. Preserve unknown non-required Session extension fields; unknown archive entries are rejected in 0.1 so their security and meaning cannot be guessed.
+Reject absolute paths, `..`, backslashes, duplicate names, symlinks, encryption, compression methods other than STORED, unexpected ZIP flags/metadata, malformed manifests, invalid sizes or hashes, more than 2,000 total ZIP entries (including the manifest), more than 256 MiB total expanded content, and unsupported versions or unrecognized required features. Check central and local ZIP metadata, then read entries sequentially under the declared size limits and verify CRC-32 and manifest SHA-256 values. The Phase 2 API returns a validated session and payload bytes in memory; it does not extract files or execute commands. Unknown archive entries are rejected in 0.1 so their security and meaning cannot be guessed.
 
 ## Compact handoff
 
