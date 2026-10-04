@@ -4,14 +4,36 @@
   "title": "Spider Session 1.0 draft",
   "description": "Provider-neutral session state. Draft pending implementation fixtures.",
   "type": "object",
-  "required": ["schema_version", "session", "objective", "state", "conversation", "tool_calls", "tool_results", "decisions", "files", "artifacts", "commands", "tests", "errors", "capture", "environment", "git", "next_action", "extensions"],
+  "required": [
+    "schema_version",
+    "session",
+    "objective",
+    "state",
+    "conversation",
+    "tool_calls",
+    "tool_results",
+    "decisions",
+    "files",
+    "artifacts",
+    "commands",
+    "tests",
+    "errors",
+    "capture",
+    "environment",
+    "git",
+    "next_action",
+    "extensions"
+  ],
   "properties": {
     "schema_version": { "const": "1.0" },
     "session": {
       "type": "object",
       "required": ["id", "created_at", "updated_at", "source_agent", "project"],
       "properties": {
-        "id": { "type": "string", "pattern": "^spw_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+        "id": {
+          "type": "string",
+          "pattern": "^spw_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
         "created_at": { "type": "string", "format": "date-time" },
         "updated_at": { "type": "string", "format": "date-time" },
         "source_agent": { "type": "string", "minLength": 1 },
@@ -20,7 +42,11 @@
           "required": ["name", "root_hint"],
           "properties": {
             "name": { "type": ["string", "null"] },
-            "root_hint": { "type": ["string", "null"], "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).*$", "description": "Optional relative POSIX path only; absolute roots live in the local index." }
+            "root_hint": {
+              "type": ["string", "null"],
+              "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).*$",
+              "description": "Optional relative POSIX path only; absolute roots live in the local index."
+            }
           },
           "additionalProperties": false
         }
@@ -41,22 +67,40 @@
       "required": ["current_task", "completed", "in_progress", "blocked"],
       "properties": {
         "current_task": { "type": ["string", "null"] },
-        "completed": { "type": "array", "items": { "$ref": "#/$defs/stateItem" } },
-        "in_progress": { "type": "array", "items": { "$ref": "#/$defs/stateItem" } },
+        "completed": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stateItem" }
+        },
+        "in_progress": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stateItem" }
+        },
         "blocked": { "type": "array", "items": { "$ref": "#/$defs/stateItem" } }
       },
       "additionalProperties": false
     },
     "conversation": { "type": "array", "items": { "$ref": "#/$defs/message" } },
     "tool_calls": { "type": "array", "items": { "$ref": "#/$defs/toolCall" } },
-    "tool_results": { "type": "array", "items": { "$ref": "#/$defs/toolResult" } },
-    "decisions": { "type": "array", "items": { "$ref": "#/$defs/evidencedItem" } },
+    "tool_results": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/toolResult" }
+    },
+    "decisions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/evidencedItem" }
+    },
     "files": {
       "type": "object",
       "required": ["created", "modified", "deleted"],
       "properties": {
-        "created": { "type": "array", "items": { "$ref": "#/$defs/fileClaim" } },
-        "modified": { "type": "array", "items": { "$ref": "#/$defs/fileClaim" } },
+        "created": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/fileClaim" }
+        },
+        "modified": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/fileClaim" }
+        },
         "deleted": { "type": "array", "items": { "$ref": "#/$defs/fileClaim" } }
       },
       "additionalProperties": false
@@ -96,15 +140,23 @@
       },
       "additionalProperties": false
     },
-    "next_action": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/evidencedItem" }] },
-    "extensions": { "type": "object", "description": "Optional provider-scoped metadata keyed by adapter id; not required to understand session state.", "additionalProperties": true }
+    "next_action": {
+      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/evidencedItem" }]
+    },
+    "extensions": {
+      "type": "object",
+      "description": "Optional provider-scoped metadata keyed by adapter id; not required to understand session state.",
+      "additionalProperties": true
+    }
   },
   "$defs": {
     "evidence": {
       "type": "object",
       "required": ["source", "confidence"],
       "properties": {
-        "source": { "enum": ["transcript", "git", "user", "adapter-derived", "unknown"] },
+        "source": {
+          "enum": ["transcript", "git", "user", "adapter-derived", "unknown"]
+        },
         "confidence": { "enum": ["observed", "inferred", "unknown"] },
         "event_id": { "type": ["string", "null"] }
       },
@@ -138,8 +190,13 @@
       "properties": {
         "id": { "type": "string", "pattern": "^e[0-9a-z]+$" },
         "sequence": { "type": "integer", "minimum": 1 },
-        "role": { "enum": ["system", "developer", "user", "assistant", "other"] },
-        "content": { "type": "array", "items": { "$ref": "#/$defs/contentPart" } },
+        "role": {
+          "enum": ["system", "developer", "user", "assistant", "other"]
+        },
+        "content": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/contentPart" }
+        },
         "timestamp": { "type": ["string", "null"], "format": "date-time" },
         "handoff_relevant": { "type": "boolean" },
         "evidence": { "$ref": "#/$defs/evidence" }
@@ -154,7 +211,9 @@
         "sequence": { "type": "integer", "minimum": 1 },
         "name": { "type": "string" },
         "input": {},
-        "status": { "enum": ["requested", "running", "completed", "failed", "unknown"] },
+        "status": {
+          "enum": ["requested", "running", "completed", "failed", "unknown"]
+        },
         "timestamp": { "type": ["string", "null"], "format": "date-time" },
         "evidence": { "$ref": "#/$defs/evidence" }
       },
@@ -167,8 +226,14 @@
         "id": { "type": "string", "pattern": "^e[0-9a-z]+$" },
         "sequence": { "type": "integer", "minimum": 1 },
         "tool_call_id": { "type": "string" },
-        "status": { "enum": ["completed", "failed", "truncated", "unavailable", "unknown"] },
-        "output": { "type": ["string", "object", "array", "number", "boolean", "null"], "maxLength": 65536, "description": "Strings are additionally limited to 64 KiB UTF-8 bytes by the validator; larger values are artifact references or marked truncations." },
+        "status": {
+          "enum": ["completed", "failed", "truncated", "unavailable", "unknown"]
+        },
+        "output": {
+          "type": ["string", "object", "array", "number", "boolean", "null"],
+          "maxLength": 65536,
+          "description": "Strings are additionally limited to 64 KiB UTF-8 bytes by the validator; larger values are artifact references or marked truncations."
+        },
         "timestamp": { "type": ["string", "null"], "format": "date-time" },
         "evidence": { "$ref": "#/$defs/evidence" }
       },
@@ -179,11 +244,19 @@
       "required": ["id", "kind", "sha256", "inclusion"],
       "properties": {
         "id": { "type": "string" },
-        "path": { "type": ["string", "null"], "minLength": 1, "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).*$", "description": "Relative POSIX source path; may be omitted to protect privacy." },
+        "path": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).*$",
+          "description": "Relative POSIX source path; may be omitted to protect privacy."
+        },
         "kind": { "type": "string" },
         "sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
         "inclusion": { "enum": ["included", "referenced", "omitted"] },
-        "entry_path": { "type": ["string", "null"], "pattern": "^artifacts/[0-9a-f]{64}$" },
+        "entry_path": {
+          "type": ["string", "null"],
+          "pattern": "^artifacts/[0-9a-f]{64}$"
+        },
         "evidence": { "$ref": "#/$defs/evidence" }
       },
       "additionalProperties": false
@@ -192,7 +265,11 @@
       "type": "object",
       "required": ["path", "evidence"],
       "properties": {
-        "path": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).*$" },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).*$"
+        },
         "evidence": { "$ref": "#/$defs/evidence" }
       },
       "additionalProperties": false
@@ -201,9 +278,24 @@
       "type": "object",
       "required": ["path", "index_status", "worktree_status"],
       "properties": {
-        "path": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).*$" },
-        "index_status": { "enum": ["added", "modified", "deleted", "renamed", "unmodified", "unknown"] },
-        "worktree_status": { "enum": ["modified", "deleted", "untracked", "unmodified", "unknown"] }
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).*$"
+        },
+        "index_status": {
+          "enum": [
+            "added",
+            "modified",
+            "deleted",
+            "renamed",
+            "unmodified",
+            "unknown"
+          ]
+        },
+        "worktree_status": {
+          "enum": ["modified", "deleted", "untracked", "unmodified", "unknown"]
+        }
       },
       "additionalProperties": false
     },
@@ -228,7 +320,9 @@
         "id": { "type": "string", "pattern": "^e[0-9a-z]+$" },
         "sequence": { "type": "integer", "minimum": 1 },
         "name": { "type": "string" },
-        "status": { "enum": ["passed", "failed", "skipped", "running", "unknown"] },
+        "status": {
+          "enum": ["passed", "failed", "skipped", "running", "unknown"]
+        },
         "details_artifact_id": { "type": ["string", "null"] },
         "evidence": { "$ref": "#/$defs/evidence" }
       },

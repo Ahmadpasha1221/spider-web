@@ -2,7 +2,7 @@
 
 **Spider Web connects AI agents. Spider Egg carries their session state.**
 
-Spider Web is a local-first, agent-neutral interoperability layer for AI coding sessions. It is a separate project from Spider Agent, and does not require Spider Agent. Version 0.1 is in architecture and research: there are no supported capture adapters yet.
+Spider Web is a local-first, agent-neutral interoperability layer for AI coding sessions. It is a separate project from Spider Agent, and does not require Spider Agent. The generic Spider Session and Spider Egg core is under development; there are no supported capture adapters yet.
 
 ```text
 Claude reaches a quota limit
@@ -20,7 +20,14 @@ The goal is to preserve working state—objective, completed and unfinished work
 
 ## Project state
 
-This repository currently contains Phase 0 decisions, architecture, protocol and research. Agent research is linked under [`docs/agents`](docs/agents/). Details derived from undocumented local storage or source code are labeled accordingly. No adapter is claimed as supported.
+This repository contains the Phase 0 protocol and agent research, plus the provider-neutral session core and Spider Egg APIs. The current CLI can validate a session JSON, export it to a `.spider-egg`, and inspect/verify an Egg. Egg contents remain in memory; the reader does not extract files. No agent adapter is claimed as supported.
+
+```bash
+spider-web session export session.json ./session.spider-egg --confirm-sensitive
+spider-web session inspect ./session.spider-egg
+```
+
+The library exports `writeSpiderEgg`, `readSpiderEgg`, `writeSpiderEggFile`, and `readSpiderEggFile`. Export previews metadata and requires confirmation for sensitive session content; the reader never executes commands from an Egg.
 
 ## Planned CLI shape
 
