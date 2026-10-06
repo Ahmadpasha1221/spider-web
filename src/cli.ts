@@ -2,7 +2,10 @@
 import { readFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
-import { parseSessionJson } from "./core/session-serialization.js";
+import {
+  parseSessionJson,
+  writeSessionJsonFile,
+} from "./core/session-serialization.js";
 import { readSpiderEggFile, writeSpiderEggFile } from "./egg/archive.js";
 
 const HELP = `Spider Web ${process.env.npm_package_version ?? "0.1.0"}
@@ -12,11 +15,13 @@ Usage:
   spider-web --version
   spider-web session validate <session.json>
   spider-web session export <session.json> <output.spider-egg> [--confirm-sensitive]
+  spider-web session import <input.spider-egg> <output-session.json> [--confirm-sensitive]
   spider-web session inspect <input.spider-egg>
 
 Commands:
   session validate <file>  Validate a provider-neutral Spider Session file
   session export <file> <output>  Create a portable Spider Egg
+  session import <file> <output>  Recover the canonical session from an Egg
   session inspect <file>  Verify an Egg and show its session summary
 `;
 
@@ -39,7 +44,7 @@ async function main(): Promise<void> {
   }
   if (
     positionals[0] !== "session" ||
-    !["validate", "export", "inspect"].includes(positionals[1] ?? "")
+    !["validate", "export", "import", "inspect"].includes(positionals[1] ?? "")
   ) {
     process.stderr.write(`${HELP}\nInvalid command.\n`);
     process.exitCode = 2;
@@ -87,6 +92,36 @@ async function main(): Promise<void> {
     }
     await writeSpiderEggFile(positionals[3]!, session);
     process.stdout.write(`Saved Spider Egg: ${positionals[3]}\n`);
+    return;
+  }
+  if (command === "import" && positionals.length === 4) {
+    const egg = await readSpiderEggFile(positionals[2]!);
+    const includedArtifactCount = egg.session.artifacts.filter(
+      (item) => item.inclusion === "included",
+    ).length;
+    process.stdout.write(
+      `Spider Egg import preview\nSession: ${egg.session.session.id}\nStatus: ${egg.session.objective.status}\nMessages: ${egg.session.conversation.length}\nArtifacts: ${includedArtifactCount}\n`,
+    );
+    if (!values["confirm-sensitive"]) {
+      if (!process.stdin.isTTY || !process.stdout.isTTY) {
+        throw new Error(
+          "Import contains sensitive session content; rerun with --confirm-sensitive",
+        );
+      }
+      const prompt = createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
+      try {
+        const answer = await prompt.question("Import this Spider Egg? [y/N] ");
+        if (!/^y(es)?$/i.test(answer.trim()))
+          throw new Error("Import cancelled");
+      } finally {
+        prompt.close();
+      }
+    }
+    await writeSessionJsonFile(positionals[3]!, egg.session);
+    process.stdout.write(`Saved Spider Session: ${positionals[3]}\n`);
     return;
   }
   if (command === "inspect" && positionals.length === 3) {

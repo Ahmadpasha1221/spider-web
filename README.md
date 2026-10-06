@@ -20,10 +20,11 @@ The goal is to preserve working state—objective, completed and unfinished work
 
 ## Project state
 
-This repository contains the Phase 0 protocol and agent research, plus the provider-neutral session core and Spider Egg APIs. The current CLI can validate a session JSON, export it to a `.spider-egg`, and inspect/verify an Egg. Egg contents remain in memory; the reader does not extract files. No agent adapter is claimed as supported.
+This repository contains the Phase 0 protocol and agent research, plus the provider-neutral session core and Spider Egg APIs. The current CLI can validate a session JSON, export it to a `.spider-egg`, import an Egg back to the canonical session JSON, and inspect/verify an Egg. Egg contents remain in memory; the reader does not extract files. No agent adapter is claimed as supported.
 
 ```bash
 spider-web session export session.json ./session.spider-egg --confirm-sensitive
+spider-web session import ./session.spider-egg ./session.json --confirm-sensitive
 spider-web session inspect ./session.spider-egg
 ```
 
