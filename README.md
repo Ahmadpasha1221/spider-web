@@ -20,24 +20,45 @@ The goal is to preserve working state—objective, completed and unfinished work
 
 ## Project state
 
-This repository contains the Phase 0 protocol and agent research, plus the provider-neutral session core and Spider Egg APIs. The current CLI can validate a session JSON, export it to a `.spider-egg`, import an Egg back to the canonical session JSON, and inspect/verify an Egg. Egg contents remain in memory; the reader does not extract files. No agent adapter is claimed as supported.
+This repository contains the Phase 0 protocol and agent research, the provider-neutral session core, the Spider Egg APIs, and the Phase 3 local session repository. The CLI stores sessions in a platform-appropriate local data directory, lists and inspects them, exports a stored session as a `.spider-egg`, imports an Egg into the repository, and validates/exports/inspects Egg files. Egg contents remain in memory; the reader does not extract files. No agent adapter is claimed as supported.
 
 ```bash
-spider-web session export session.json ./session.spider-egg --confirm-sensitive
-spider-web session import ./session.spider-egg ./session.json --confirm-sensitive
-spider-web session inspect ./session.spider-egg
+spider-web session list
+spider-web session inspect <session-id>
+spider-web session export <session-id> ./session.spider-egg --confirm-sensitive
+spider-web session import ./session.spider-egg --confirm-sensitive
+spider-web session delete <session-id>
+
+spider-web egg export session.json ./session.spider-egg --confirm-sensitive
+spider-web egg import ./session.spider-egg ./session.json --confirm-sensitive
+spider-web egg inspect ./session.spider-egg
+spider-web session validate session.json
 ```
 
-The library exports `writeSpiderEgg`, `readSpiderEgg`, `writeSpiderEggFile`, and `readSpiderEggFile`. Export previews metadata and requires confirmation for sensitive session content; the reader never executes commands from an Egg.
+The library exports the Spider Session core (`createEmptySession`, `validateSession`, `serializeSession`, `parseSessionJson`), the Egg APIs (`writeSpiderEgg`, `readSpiderEgg`, `writeSpiderEggFile`, `readSpiderEggFile`), and the repository (`LocalSessionRepository`, `SessionRepository`, `SessionSummary`). Export and import preview metadata and require confirmation for sensitive session content; the Egg reader never executes commands from an Egg.
+
+## Local session repository
+
+Sessions live under the platform data directory as canonical `sessions/<session-id>/session.json` files, with a rebuildable `index.json` discovery cache:
+
+- Linux: `$XDG_DATA_HOME/spider-web`, falling back to `~/.local/share/spider-web`
+- macOS: `~/Library/Application Support/spider-web`
+- Windows: `%LOCALAPPDATA%\Spider Web`
+- Override for tests or isolated environments: `SPIDER_WEB_DATA_DIR`
+
+The index is a cache, not the source of truth. If `index.json` is missing, malformed, or stale (for example, a session file was written but the index update failed), the repository rebuilds it from the canonical session files on the next read. Session files are written atomically: creation is exclusive (existing files are never overwritten) and updates replace the file via a synced temporary file and rename, so a failed update always leaves the previous valid session intact. Concurrent writes to the same session are last-write-wins at the file level; there is no cross-process locking in this phase.
+
+`findActive()` reports sessions whose status is `in_progress` or `blocked` over the existing schema statuses (`in_progress`, `blocked`, `completed`, `unknown`); it invents no new lifecycle states.
 
 ## Planned CLI shape
 
 ```text
 spider-web session list
 spider-web session capture claude
-spider-web session inspect <id-or-egg>
-spider-web session export <id> [--output project.spider-egg] [--confirm-sensitive]
+spider-web session inspect <session-id>
+spider-web session export <session-id> [--output project.spider-egg] [--confirm-sensitive]
 spider-web session import <file.spider-egg>
+spider-web session delete <session-id>
 spider-web session handoff <id-or-egg> [--confirm-sensitive]
 spider-web session continue <file.spider-egg> --agent codex [--confirm-sensitive]
 ```

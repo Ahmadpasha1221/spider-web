@@ -5,3 +5,8 @@ export * from "./core/schema.js";
 export * from "./protocol/manifest.js";
 export * from "./egg/archive.js";
 export * from "./adapters/capabilities.js";
+export * from "./repository/atomic-write.js";
+export * from "./repository/session-repository.js";
+export * from "./repository/session-store-paths.js";
+export * from "./repository/session-index.js";
+export * from "./repository/local-session-repository.js";
