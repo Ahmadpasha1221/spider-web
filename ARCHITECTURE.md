@@ -1,4 +1,4 @@
-# Spider Web Architecture (Phase 0)
+# Spider Web Architecture (Phase 5)
 
 ## Purpose and boundaries
 
@@ -50,7 +50,9 @@ Capture must not execute source commands, mutate agent history, stage/commit/res
 1. Validate Egg and schema, then render a compact handoff with state before history.
 2. Ask for explicit inclusion of attachments or sensitive artifacts.
 3. Call the target adapter only for a declared capability. Native resume, native import, export format, and generic handoff are distinct capabilities.
-4. For Codex 0.1, provide a Markdown handoff and a documented/manual CLI continuation command. Do not edit Codex's private rollout files or claim thread migration.
+4. For Codex, use the documented `codex exec --json` stream for bounded local runs. Normalize its events and append them to the Spider Session. Cross-provider continuation starts a new Codex provider thread; provider-native Codex resume remains a separate operation. Do not edit Codex's private rollout files or claim thread migration.
+
+The current CLI runner uses provider-mediated `--ask-for-approval on-request` by default, with `never` available for explicitly non-interactive runs. Persistent app-server integration is reserved for a later phase because it requires a separate JSON-RPC lifecycle and approval transport.
 
 ## Local storage decision
 

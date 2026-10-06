@@ -14,7 +14,8 @@
 - Level 1 local capture may be technically possible from rollout JSONL, but mark experimental until format compatibility policy and fixtures are established.
 - Native resume capability only addresses a Codex-owned session ID. It does not resume a Claude thread.
 - Extract messages/tool events carefully and treat outputs as sensitive. Changes to working tree should come from independent Git inspection, not assumed from transcript tool calls.
-- For first milestone, Codex target adapter should produce a concise brief and an explicit manual start instruction.
+- Spider's Phase 5 bounded runner uses the documented `codex exec --json` stream. It starts a new provider thread for cross-agent continuation, normalizes JSONL events, and appends them to the existing Spider session. The runner does not read or write private rollout files.
+- The provider-mediated `on-request` approval policy is the default; `never` is available for explicitly non-interactive runs. Full application-controlled approval callbacks require the app-server transport and remain a future extension.
 
 ## Unanswered
 
