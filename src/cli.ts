@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 import {
@@ -21,7 +22,13 @@ import type {
   AgentPermissionMode,
 } from "./adapters/agent-runner.js";
 
-const HELP = `Spider Web ${process.env.npm_package_version ?? "0.1.0"}
+const require = createRequire(import.meta.url);
+
+const { version: VERSION } = require("../../package.json") as {
+  version: string;
+};
+
+const HELP = `Spider Web ${VERSION}
 
 Usage:
   spider-web --help
@@ -216,7 +223,7 @@ async function main(): Promise<void> {
     return;
   }
   if (values.version) {
-    process.stdout.write("0.1.0\n");
+    process.stdout.write(`${VERSION}\n`);
     return;
   }
 
@@ -459,8 +466,7 @@ function printAgentEvent(event: AgentEvent): void {
       break;
     case "command_finished":
       process.stdout.write(
-        `$ ${event.command} -> ${event.status}${
-          event.exitCode === null ? "" : ` (exit ${event.exitCode})`
+        `$ ${event.command} -> ${event.status}${event.exitCode === null ? "" : ` (exit ${event.exitCode})`
         }\n`,
       );
       break;
@@ -475,8 +481,7 @@ function printAgentEvent(event: AgentEvent): void {
       break;
     case "session_completed":
       process.stdout.write(
-        `Completed (${event.turns} turns${
-          event.totalCostUsd === null ? "" : `, $${event.totalCostUsd}`
+        `Completed (${event.turns} turns${event.totalCostUsd === null ? "" : `, $${event.totalCostUsd}`
         })\n`,
       );
       break;
