@@ -214,6 +214,93 @@ describe("CodexAgentRunner", () => {
     expect(seen[0]?.args.at(-1)).toBe(prompt);
   });
 
+  it("passes a Node-script launch strategy to the process seam", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "spider-web-codex-"));
+    temporaryDirectories.push(directory);
+    const repository = new LocalSessionRepository({ dataDirectory: directory });
+    const { spawn, seen } = fakeSpawn([
+      JSON.stringify({ type: "thread.started", thread_id: "thread-node" }),
+      JSON.stringify({ type: "turn.completed", usage: {} }),
+    ]);
+    const resolved: ResolvedCodexExecutable = {
+      binary: "C:\\fake\\npm\\codex.cmd",
+      launcher: "node-script",
+      nodeBinary: "C:\\tools\\node.exe",
+      script: "C:\\fake\\npm\\node_modules\\@openai\\codex\\bin\\codex.js",
+    };
+    const runner = new CodexAgentRunner({
+      repository,
+      spawn,
+      resolveExecutable: () => resolved,
+    });
+    const prompt = 'Fix "a && b", $(echo bad), & whoami';
+    await (await runner.start({ prompt, cwd: process.cwd() })).wait();
+    expect(seen[0]).toMatchObject({
+      binary: "C:\\tools\\node.exe",
+      launcher: "node-script",
+    });
+    expect(seen[0]?.args[0]).toBe(
+      "C:\\fake\\npm\\node_modules\\@openai\\codex\\bin\\codex.js",
+    );
+    expect(seen[0]?.args.at(-1)).toBe(prompt);
+  });
+
+  it("regression: delivers complex multiline continuation prompt intact via node-script launcher", async () => {
+    const directory = await mkdtemp(
+      join(tmpdir(), "spider-web-codex-continuation-"),
+    );
+    temporaryDirectories.push(directory);
+    const repository = new LocalSessionRepository({ dataDirectory: directory });
+    const { spawn, seen } = fakeSpawn([
+      JSON.stringify({
+        type: "thread.started",
+        thread_id: "thread-continuation",
+      }),
+      JSON.stringify({ type: "turn.completed", usage: {} }),
+    ]);
+    const resolved: ResolvedCodexExecutable = {
+      binary: "C:\\fake\\npm\\codex.cmd",
+      launcher: "node-script",
+      nodeBinary: "node",
+      script: "C:\\fake\\npm\\node_modules\\@openai\\codex\\bin\\codex.js",
+    };
+    const runner = new CodexAgentRunner({
+      repository,
+      spawn,
+      resolveExecutable: () => resolved,
+    });
+    const continuationPrompt = `CONTINUATION TEST
+Original objective: Inspect this project.
+Continue the existing work. Do not restart completed work unnecessarily.
+Special chars: & | < > ! "quoted"
+Windows path: C:\\working_place\\spider-product-test
+Markdown: \`code\` **bold**`;
+
+    const source = createEmptySession("Inspect this project", {
+      sourceAgent: "claude-code",
+    });
+    await repository.create(source);
+
+    await (
+      await runner.start(
+        { prompt: continuationPrompt, cwd: process.cwd() },
+        { session: source, sandbox: "workspace-write" },
+      )
+    ).wait();
+
+    expect(seen.length).toBe(1);
+    expect(seen[0]?.binary).toBe("node");
+    expect(seen[0]?.launcher).toBe("node-script");
+    expect(seen[0]?.args[0]).toBe(
+      "C:\\fake\\npm\\node_modules\\@openai\\codex\\bin\\codex.js",
+    );
+    // The exact prompt must arrive intact as the final argument in the argument array:
+    expect(seen[0]?.args.at(-1)).toBe(continuationPrompt);
+    // Verify prompt was NOT wrapped in quotes or caret-escaped:
+    expect(seen[0]?.args.at(-1)).not.toContain("^&");
+    expect(seen[0]?.args.at(-1)).not.toContain("^|");
+  });
+
   it("rejects an invalid working directory", async () => {
     const directory = await mkdtemp(join(tmpdir(), "spider-web-codex-"));
     temporaryDirectories.push(directory);
@@ -451,5 +538,203 @@ describe("buildCodexArgs", () => {
       resolve(process.cwd()),
       "Inspect this project and run tests",
     ]);
+  });
+
+  it("preserves intermediate tool failure while finishing session as completed when Codex recovers", async () => {
+    const directory = await mkdtemp(
+      join(tmpdir(), "spider-web-codex-intermediate-"),
+    );
+    temporaryDirectories.push(directory);
+    const repository = new LocalSessionRepository({ dataDirectory: directory });
+    const { spawn } = fakeSpawn([
+      JSON.stringify({ type: "thread.started", thread_id: "thread-recovery" }),
+      JSON.stringify({ type: "turn.started" }),
+      JSON.stringify({
+        type: "item.started",
+        item: {
+          id: "patch_1",
+          type: "file_change",
+          changes: [{ path: "calculator.py", kind: "update" }],
+        },
+      }),
+      JSON.stringify({
+        type: "item.completed",
+        item: {
+          id: "patch_1",
+          type: "file_change",
+          status: "failed",
+          error: { message: "apply_patch verification failed" },
+        },
+      }),
+      JSON.stringify({
+        type: "item.started",
+        item: {
+          id: "patch_2",
+          type: "file_change",
+          changes: [{ path: "calculator.py", kind: "update" }],
+        },
+      }),
+      JSON.stringify({
+        type: "item.completed",
+        item: {
+          id: "patch_2",
+          type: "file_change",
+          status: "completed",
+          changes: [{ path: "calculator.py", kind: "update" }],
+        },
+      }),
+      JSON.stringify({ type: "turn.completed", usage: {} }),
+    ]);
+    const runner = new CodexAgentRunner({ repository, spawn });
+    const run = await runner.start({
+      prompt: "Fix calculator",
+      cwd: process.cwd(),
+    });
+    const outcome = await run.wait();
+    expect(outcome.status).toBe("completed");
+
+    const session = await repository.get(run.sessionId);
+    expect(session).not.toBeNull();
+    expect(session?.objective.status).toBe("completed");
+    expect(session?.tool_results.some((r) => r.status === "failed")).toBe(true);
+    expect(session?.tool_results.some((r) => r.status === "completed")).toBe(
+      true,
+    );
+    expect(session?.files.modified.map((f) => f.path)).toEqual([
+      "calculator.py",
+    ]);
+  });
+
+  it("records complete structured evidence from realistic end-to-end event fixture", async () => {
+    const directory = await mkdtemp(
+      join(tmpdir(), "spider-web-codex-fixture-"),
+    );
+    temporaryDirectories.push(directory);
+    const repository = new LocalSessionRepository({ dataDirectory: directory });
+    const { spawn } = fakeSpawn([
+      JSON.stringify({
+        type: "thread.started",
+        thread_id: "01a11617-7bd0-7610-824d-a8874fc24272",
+      }),
+      JSON.stringify({ type: "turn.started" }),
+      JSON.stringify({
+        type: "item.completed",
+        item: {
+          id: "item_0",
+          type: "agent_message",
+          text: "I will improve calculator and run the test suite.",
+        },
+      }),
+      JSON.stringify({
+        type: "item.started",
+        item: {
+          id: "item_1",
+          type: "file_change",
+          changes: [{ path: "calculator.py", kind: "update" }],
+        },
+      }),
+      JSON.stringify({
+        type: "item.completed",
+        item: {
+          id: "item_1",
+          type: "file_change",
+          status: "completed",
+          changes: [{ path: "calculator.py", kind: "update" }],
+        },
+      }),
+      JSON.stringify({
+        type: "item.started",
+        item: {
+          id: "item_2",
+          type: "file_change",
+          changes: [{ path: "test_calculator.py", kind: "update" }],
+        },
+      }),
+      JSON.stringify({
+        type: "item.completed",
+        item: {
+          id: "item_2",
+          type: "file_change",
+          status: "completed",
+          changes: [{ path: "test_calculator.py", kind: "update" }],
+        },
+      }),
+      JSON.stringify({
+        type: "item.started",
+        item: {
+          id: "item_3",
+          type: "command_execution",
+          command: "python -m unittest discover -v",
+        },
+      }),
+      JSON.stringify({
+        type: "item.completed",
+        item: {
+          id: "item_3",
+          type: "command_execution",
+          command: "python -m unittest discover -v",
+          status: "completed",
+          exit_code: 0,
+          aggregated_output: "Ran 9 tests in 0.002s\n\nOK",
+        },
+      }),
+      JSON.stringify({
+        type: "turn.completed",
+        usage: { total_cost_usd: 0.02 },
+      }),
+    ]);
+    const runner = new CodexAgentRunner({ repository, spawn });
+    const run = await runner.start({
+      prompt: "Improve calculator and run tests",
+      cwd: process.cwd(),
+    });
+    const outcome = await run.wait();
+    expect(outcome.status).toBe("completed");
+
+    const session = await repository.get(run.sessionId);
+    expect(session).not.toBeNull();
+    if (session === null) return;
+
+    expect(session.objective.status).toBe("completed");
+
+    // Files modified
+    const filePaths = session.files.modified.map((f) => f.path);
+    expect(filePaths).toContain("calculator.py");
+    expect(filePaths).toContain("test_calculator.py");
+
+    // Tool calls do not contain malformed "file"
+    for (const toolCall of session.tool_calls) {
+      if (toolCall.name === "Edit") {
+        expect(toolCall.input).not.toEqual({ file_path: "file" });
+      }
+    }
+
+    // Commands recorded
+    const cmd = session.commands.find(
+      (c) =>
+        c.command === "python -m unittest discover -v" &&
+        c.status === "succeeded",
+    );
+    expect(cmd).toBeDefined();
+    expect(cmd?.exit_code).toBe(0);
+    expect(cmd?.status).toBe("succeeded");
+
+    // Tests recorded
+    expect(session.tests).toHaveLength(1);
+    expect(session.tests[0]).toMatchObject({
+      name: "unittest",
+      status: "passed",
+    });
+
+    // Errors does not contain fatal error
+    expect(session.errors).toHaveLength(0);
+
+    // Omissions do not complain about turn.started
+    expect(session.capture.omissions).toEqual([]);
+
+    // Provider session ID preserved
+    expect(session.extensions.codex).toMatchObject({
+      providerSessionId: "01a11617-7bd0-7610-824d-a8874fc24272",
+    });
   });
 });
