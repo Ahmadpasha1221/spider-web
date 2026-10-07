@@ -114,10 +114,7 @@ export class CodexAgentRunner implements AgentRunner {
     const shouldResolve =
       this.options.spawn === undefined ||
       this.options.resolveExecutable !== undefined;
-    let resolved: {
-      binary: string;
-      launcher: "direct" | "windows-command-shim";
-    };
+    let resolved: ResolvedCodexExecutable;
     try {
       resolved = shouldResolve
         ? (this.options.resolveExecutable ?? resolveCodexExecutable)(
@@ -141,10 +138,19 @@ export class CodexAgentRunner implements AgentRunner {
     const args = buildCodexArgs(options, config, sandbox);
     let child: ReturnType<CodexSpawnFunction>;
     try {
-      child = spawnWith(resolved.binary, args, {
-        cwd,
-        launcher: resolved.launcher,
-      });
+      if (resolved.launcher === "node-script") {
+        const nodeBinary = resolved.nodeBinary ?? "node";
+        const script = resolved.script ?? resolved.binary;
+        child = spawnWith(nodeBinary, [script, ...args], {
+          cwd,
+          launcher: resolved.launcher,
+        });
+      } else {
+        child = spawnWith(resolved.binary, args, {
+          cwd,
+          launcher: resolved.launcher,
+        });
+      }
     } catch (error) {
       const code = (error as { code?: string }).code;
       const message =
@@ -203,14 +209,13 @@ export class CodexAgentRunner implements AgentRunner {
       }
       const normalized = normalizer.push(parsed);
       if (normalized.kind === "ignored") {
-        const type =
-          typeof parsed === "object" && parsed !== null && "type" in parsed
-            ? String((parsed as { type: unknown }).type)
-            : "unknown";
+        return;
+      }
+      if (normalized.kind === "unsupported") {
         recorder.apply({
           type: "capture_note",
           kind: "omission",
-          note: `Unknown or unsupported Codex event type: ${type}`,
+          note: `Unknown or unsupported Codex event type: ${normalized.eventType}`,
         });
         await this.persist(recorder);
         return;
@@ -219,7 +224,7 @@ export class CodexAgentRunner implements AgentRunner {
         recorder.apply({
           type: "capture_note",
           kind: "omission",
-          note: `Codex event ignored`,
+          note: `Codex event malformed: ${normalized.note}`,
         });
         await this.persist(recorder);
         return;

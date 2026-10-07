@@ -1,14 +1,39 @@
 {
-  "name": "spider-web",
+  "name": "@codeviaspider/spider-web",
   "version": "0.1.0",
-  "private": true,
   "description": "Local-first, agent-neutral session interoperability foundation",
   "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
   "bin": {
     "spider-web": "dist/src/cli.js"
   },
+  "files": [
+    "dist",
+    "schemas",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ahmadpasha1221/spider-web.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Ahmadpasha1221/spider-web/issues"
+  },
+  "homepage": "https://github.com/Ahmadpasha1221/spider-web#readme",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "generate:types": "json2ts -i schemas/spider-session.schema.json -o src/generated/spider-session.ts && json2ts -i schemas/spider-egg-manifest.schema.json -o src/generated/spider-egg-manifest.ts",
