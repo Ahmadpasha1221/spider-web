@@ -1,6 +1,6 @@
 {
-  "name": "@codeviaspider/spider-web",
-  "version": "0.1.0",
+  "name": "spider-web",
+  "version": "0.1.1",
   "description": "Local-first, agent-neutral session interoperability foundation",
   "type": "module",
   "main": "./dist/src/index.js",
