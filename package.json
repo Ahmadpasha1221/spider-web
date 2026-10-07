@@ -1,5 +1,5 @@
 {
-  "name": "spider-web",
+  "name": "@ahmadpasha1221/spider-web",
   "version": "0.1.2",
   "description": "Local-first, agent-neutral session interoperability foundation",
   "type": "module",
