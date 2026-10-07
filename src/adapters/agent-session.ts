@@ -9,6 +9,7 @@ import type {
   AgentSessionCompletedEvent,
   AgentSessionFailedEvent,
   AgentSessionStartedEvent,
+  AgentTestEvent,
   AgentToolCallEvent,
   AgentToolResultEvent,
   AgentUserMessageEvent,
@@ -85,6 +86,9 @@ export class SessionRecorder {
         break;
       case "command_finished":
         this.applyCommandFinished(event);
+        break;
+      case "test":
+        this.applyTest(event);
         break;
       case "error":
         this.applyError(event);
@@ -220,10 +224,88 @@ export class SessionRecorder {
   }
 
   private applyFileChanged(event: AgentFileChangedEvent): void {
-    this.draft.files[event.change].push({
-      path: event.path,
+    const { path, change } = event;
+    const files = this.draft.files;
+
+    const findIndex = (list: { path: string }[]): number =>
+      list.findIndex((item) => item.path === path);
+
+    const createdIndex = findIndex(files.created);
+    const modifiedIndex = findIndex(files.modified);
+    const deletedIndex = findIndex(files.deleted);
+
+    if (change === "created") {
+      if (createdIndex >= 0) {
+        // Already recorded as created; no duplicate.
+        return;
+      }
+      if (modifiedIndex >= 0) {
+        files.modified.splice(modifiedIndex, 1);
+      }
+      if (deletedIndex >= 0) {
+        files.deleted.splice(deletedIndex, 1);
+      }
+      files.created.push({
+        path,
+        evidence: {
+          source: "adapter-derived",
+          confidence: "observed",
+          event_id: null,
+        },
+      });
+    } else if (change === "modified") {
+      if (createdIndex >= 0) {
+        // If created earlier during this session, it remains "created".
+        return;
+      }
+      if (modifiedIndex >= 0) {
+        // Already recorded as modified; no duplicate.
+        return;
+      }
+      if (deletedIndex >= 0) {
+        files.deleted.splice(deletedIndex, 1);
+      }
+      files.modified.push({
+        path,
+        evidence: {
+          source: "adapter-derived",
+          confidence: "observed",
+          event_id: null,
+        },
+      });
+    } else if (change === "deleted") {
+      if (deletedIndex >= 0) {
+        // Already recorded as deleted; no duplicate.
+        return;
+      }
+      if (createdIndex >= 0) {
+        // File was created and then deleted during this session.
+        files.created.splice(createdIndex, 1);
+      }
+      if (modifiedIndex >= 0) {
+        files.modified.splice(modifiedIndex, 1);
+      }
+      files.deleted.push({
+        path,
+        evidence: {
+          source: "adapter-derived",
+          confidence: "observed",
+          event_id: null,
+        },
+      });
+    }
+  }
+
+  private applyTest(event: AgentTestEvent): void {
+    const { id, sequence } = this.nextEvent();
+    this.draft.tests.push({
+      id,
+      sequence,
+      name: event.name,
+      status: event.status,
+      details_artifact_id: null,
       evidence: {
-        source: "adapter-derived",
+        source: event.evidenceSource ?? "transcript",
         confidence: "observed",
         event_id: null,
       },
