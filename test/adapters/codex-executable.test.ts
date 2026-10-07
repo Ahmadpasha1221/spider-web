@@ -77,38 +77,113 @@ describe("resolveCodexExecutable", () => {
     });
   });
 
-  it("selects a Windows npm command shim with a shell launcher", () => {
+  it("resolves Windows codex.cmd to a Node-script launch", () => {
     mockPlatform("win32");
-    const result = resolveCodexExecutable(
-      undefined,
-      () => "C:\\fake\\npm\\codex.cmd\r\n",
-    );
+    const mockFs = {
+      existsSync: (p: string) =>
+        p === "C:\\fake\\npm\\codex.cmd" ||
+        p === "C:\\fake\\npm\\node_modules\\@openai\\codex\\bin\\codex.js",
+      readFileSync: () =>
+        `@ECHO off\r\n"%_prog%"  "%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js" %*\r\n`,
+    };
+    const result = resolveCodexExecutable(undefined, {
+      whereFn: () => "C:\\fake\\npm\\codex.cmd\r\n",
+      fs: mockFs,
+    });
     expect(result).toEqual({
       binary: "C:\\fake\\npm\\codex.cmd",
-      launcher: "windows-command-shim",
+      launcher: "node-script",
+      nodeBinary: "node",
+      script: "C:\\fake\\npm\\node_modules\\@openai\\codex\\bin\\codex.js",
     });
+  });
+
+  it("resolves the underlying Node executable correctly when local node.exe exists", () => {
+    mockPlatform("win32");
+    const mockFs = {
+      existsSync: (p: string) =>
+        p === "C:\\fake\\npm\\codex.cmd" ||
+        p === "C:\\fake\\npm\\node.exe" ||
+        p === "C:\\fake\\npm\\node_modules\\@openai\\codex\\bin\\codex.js",
+      readFileSync: () =>
+        `@ECHO off\r\n"%_prog%"  "%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js" %*\r\n`,
+    };
+    const result = resolveCodexExecutable(undefined, {
+      whereFn: () => "C:\\fake\\npm\\codex.cmd\r\n",
+      fs: mockFs,
+    });
+    expect(result.nodeBinary).toBe("C:\\fake\\npm\\node.exe");
+    expect(result.script).toBe(
+      "C:\\fake\\npm\\node_modules\\@openai\\codex\\bin\\codex.js",
+    );
   });
 
   it("selects a Windows npm command shim when preceded by extensionless script", () => {
     mockPlatform("win32");
-    const result = resolveCodexExecutable(
-      undefined,
-      () => "C:\\fake\\npm\\codex\r\nC:\\fake\\npm\\codex.cmd\r\n",
-    );
-    expect(result).toEqual({
-      binary: "C:\\fake\\npm\\codex.cmd",
-      launcher: "windows-command-shim",
+    const mockFs = {
+      existsSync: (p: string) =>
+        p === "C:\\fake\\npm\\codex.cmd" ||
+        p === "C:\\fake\\npm\\node_modules\\@openai\\codex\\bin\\codex.js",
+      readFileSync: () =>
+        `@ECHO off\r\n"%_prog%"  "%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js" %*\r\n`,
+    };
+    const result = resolveCodexExecutable(undefined, {
+      whereFn: () => "C:\\fake\\npm\\codex\r\nC:\\fake\\npm\\codex.cmd\r\n",
+      fs: mockFs,
     });
+    expect(result.launcher).toBe("node-script");
+    expect(result.script).toBe(
+      "C:\\fake\\npm\\node_modules\\@openai\\codex\\bin\\codex.js",
+    );
   });
 
-  it("supports Windows bat shims", () => {
+  it("throws clear error when discovered shim is missing on disk", () => {
     mockPlatform("win32");
-    const result = resolveCodexExecutable(
-      undefined,
-      () => "C:\\fake\\npm\\codex.bat\r\n",
+    const mockFs = {
+      existsSync: () => false,
+      readFileSync: () => "",
+    };
+    expect(() =>
+      resolveCodexExecutable(undefined, {
+        whereFn: () => "C:\\fake\\npm\\codex.cmd\r\n",
+        fs: mockFs,
+      }),
+    ).toThrow("Codex executable not found: C:\\fake\\npm\\codex.cmd");
+  });
+
+  it("throws clear error when npm shim entrypoint does not exist", () => {
+    mockPlatform("win32");
+    const mockFs = {
+      existsSync: (p: string) => p === "C:\\fake\\npm\\codex.cmd",
+      readFileSync: () =>
+        `@ECHO off\r\n"%_prog%"  "%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js" %*\r\n`,
+    };
+    expect(() =>
+      resolveCodexExecutable(undefined, {
+        whereFn: () => "C:\\fake\\npm\\codex.cmd\r\n",
+        fs: mockFs,
+      }),
+    ).toThrow(
+      "Invalid Codex npm shim: entrypoint not found for C:\\fake\\npm\\codex.cmd",
     );
-    expect(result.launcher).toBe("windows-command-shim");
-    expect(result.binary).toBe("C:\\fake\\npm\\codex.bat");
+  });
+
+  it("does not execute arbitrary shell commands during discovery", () => {
+    mockPlatform("win32");
+    const spawnSpy = vi.fn();
+    const mockFs = {
+      existsSync: (p: string) =>
+        p === "C:\\fake\\npm\\codex.cmd" ||
+        p === "C:\\fake\\npm\\node_modules\\@openai\\codex\\bin\\codex.js",
+      readFileSync: () =>
+        `@ECHO off\r\n"%_prog%"  "%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js" %*\r\n`,
+    };
+    resolveCodexExecutable(undefined, {
+      whereFn: () => "C:\\fake\\npm\\codex.cmd\r\n",
+      spawnFn: spawnSpy as SpawnSyncFunction,
+      fs: mockFs,
+    });
+    expect(spawnSpy).not.toHaveBeenCalled();
   });
 
   it("prefers native .exe when both .exe and .cmd exist", () => {
@@ -176,14 +251,23 @@ describe("resolveCodexExecutable", () => {
     ).toEqual({ binary: "/custom/codex", launcher: "direct" });
 
     mockPlatform("win32");
+    const mockFs = {
+      existsSync: (p: string) =>
+        p === "C:\\custom\\codex.cmd" ||
+        p === "C:\\custom\\node_modules\\@openai\\codex\\bin\\codex.js",
+      readFileSync: () =>
+        `@ECHO off\r\n"%_prog%"  "%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js" %*\r\n`,
+    };
     expect(
-      resolveCodexExecutable(
-        "C:\\custom\\codex.cmd",
-        createMockSpawn(["codex.cmd"]),
-      ),
+      resolveCodexExecutable("C:\\custom\\codex.cmd", {
+        spawnFn: createMockSpawn(["codex.cmd"]),
+        fs: mockFs,
+      }),
     ).toEqual({
       binary: "C:\\custom\\codex.cmd",
-      launcher: "windows-command-shim",
+      launcher: "node-script",
+      nodeBinary: "node",
+      script: "C:\\custom\\node_modules\\@openai\\codex\\bin\\codex.js",
     });
   });
 
@@ -195,17 +279,36 @@ describe("resolveCodexExecutable", () => {
     });
 
     mockPlatform("win32");
-    expect(resolveCodexExecutable("C:\\custom\\codex.cmd")).toEqual({
+    const mockFs = {
+      existsSync: (p: string) =>
+        p === "C:\\custom\\codex.cmd" ||
+        p === "C:\\custom\\node_modules\\@openai\\codex\\bin\\codex.js" ||
+        p === "C:\\custom\\codex.exe" ||
+        p === "C:\\custom\\codex.bat",
+      readFileSync: (p: string) =>
+        p === "C:\\custom\\codex.cmd"
+          ? `@ECHO off\r\n"%_prog%"  "%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js" %*\r\n`
+          : `@ECHO off\r\necho custom batch\r\n`,
+    };
+    expect(
+      resolveCodexExecutable("C:\\custom\\codex.cmd", { fs: mockFs }),
+    ).toEqual({
       binary: "C:\\custom\\codex.cmd",
-      launcher: "windows-command-shim",
+      launcher: "node-script",
+      nodeBinary: "node",
+      script: "C:\\custom\\node_modules\\@openai\\codex\\bin\\codex.js",
     });
 
-    expect(resolveCodexExecutable("C:\\custom\\codex.exe")).toEqual({
+    expect(
+      resolveCodexExecutable("C:\\custom\\codex.exe", { fs: mockFs }),
+    ).toEqual({
       binary: "C:\\custom\\codex.exe",
       launcher: "direct",
     });
 
-    expect(resolveCodexExecutable("C:\\custom\\codex.bat")).toEqual({
+    expect(
+      resolveCodexExecutable("C:\\custom\\codex.bat", { fs: mockFs }),
+    ).toEqual({
       binary: "C:\\custom\\codex.bat",
       launcher: "windows-command-shim",
     });

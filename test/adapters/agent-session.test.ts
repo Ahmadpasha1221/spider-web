@@ -394,6 +394,105 @@ describe("SessionRecorder", () => {
     recorder(session).touch();
     expect(session.session.updated_at >= before).toBe(true);
   });
+
+  it("deduplicates multiple modifications to the same file", () => {
+    const session = createEmptySession("goal");
+    const r = recorder(session);
+    r.apply({
+      type: "file_changed",
+      path: "calculator.py",
+      change: "modified",
+    });
+    r.apply({
+      type: "file_changed",
+      path: "calculator.py",
+      change: "modified",
+    });
+    r.apply({
+      type: "file_changed",
+      path: "calculator.py",
+      change: "modified",
+    });
+    expect(session.files.modified.map((f) => f.path)).toEqual([
+      "calculator.py",
+    ]);
+    expect(session.files.created).toHaveLength(0);
+    expect(session.files.deleted).toHaveLength(0);
+  });
+
+  it("preserves created status when a created file is subsequently modified", () => {
+    const session = createEmptySession("goal");
+    const r = recorder(session);
+    r.apply({ type: "file_changed", path: "calculator.py", change: "created" });
+    r.apply({
+      type: "file_changed",
+      path: "calculator.py",
+      change: "modified",
+    });
+    expect(session.files.created.map((f) => f.path)).toEqual(["calculator.py"]);
+    expect(session.files.modified).toHaveLength(0);
+    expect(session.files.deleted).toHaveLength(0);
+  });
+
+  it("handles transitions to deleted cleanly without duplicates across arrays", () => {
+    const session = createEmptySession("goal");
+    const r = recorder(session);
+    r.apply({
+      type: "file_changed",
+      path: "created_then_del.py",
+      change: "created",
+    });
+    r.apply({
+      type: "file_changed",
+      path: "created_then_del.py",
+      change: "deleted",
+    });
+    expect(session.files.created).toHaveLength(0);
+    expect(session.files.deleted.map((f) => f.path)).toEqual([
+      "created_then_del.py",
+    ]);
+
+    r.apply({
+      type: "file_changed",
+      path: "mod_then_del.py",
+      change: "modified",
+    });
+    r.apply({
+      type: "file_changed",
+      path: "mod_then_del.py",
+      change: "deleted",
+    });
+    expect(session.files.modified).toHaveLength(0);
+    expect(session.files.deleted.map((f) => f.path)).toEqual([
+      "created_then_del.py",
+      "mod_then_del.py",
+    ]);
+  });
+
+  it("records test event into session.tests with correct sequence and valid draft", () => {
+    const session = createEmptySession("goal");
+    const r = recorder(session);
+    r.apply({
+      type: "test",
+      name: "unittest",
+      status: "passed",
+      evidenceSource: "transcript",
+    });
+    expect(session.tests).toHaveLength(1);
+    expect(session.tests[0]).toEqual({
+      id: "e1",
+      sequence: 1,
+      name: "unittest",
+      status: "passed",
+      details_artifact_id: null,
+      evidence: {
+        source: "transcript",
+        confidence: "observed",
+        event_id: null,
+      },
+    });
+    validateSession(session);
+  });
 });
 
 const SESSION_ID = "44444444-4444-4444-8444-444444444444";

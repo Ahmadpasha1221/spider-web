@@ -1,9 +1,18 @@
+import { normalizeSafeWorkspacePath } from "./codex-paths.js";
+
+export interface CodexFileChangeInfo {
+  readonly path: string;
+  readonly change: "created" | "modified" | "deleted";
+}
+
 export interface CodexItemContext {
   tool: string;
   input: unknown;
   description: string;
   command: string | null;
   filePath: string | null;
+  fileChanges?: readonly CodexFileChangeInfo[];
+  rejectedFilePaths?: readonly { rawPath: string; error: string }[];
 }
 
 export function asRecord(value: unknown): Record<string, unknown> | null {
@@ -45,11 +54,84 @@ export function readExitCode(item: Record<string, unknown>): number | null {
   return null;
 }
 
+function parseChangeKind(rawKind: unknown): "created" | "modified" | "deleted" {
+  if (typeof rawKind !== "string") return "modified";
+  const lower = rawKind.toLowerCase();
+  if (lower === "add" || lower === "create" || lower === "new")
+    return "created";
+  if (lower === "delete" || lower === "remove") return "deleted";
+  return "modified";
+}
+
+export function extractCodexFileChanges(
+  item: Record<string, unknown>,
+  cwd: string,
+): {
+  valid: CodexFileChangeInfo[];
+  invalid: { rawPath: string; error: string }[];
+} {
+  const candidates: { rawPath: string; kind: unknown }[] = [];
+
+  // 1. Check item.changes array (standard in Codex CLI 0.160.0)
+  if (Array.isArray(item.changes)) {
+    for (const change of item.changes) {
+      if (typeof change === "string") {
+        candidates.push({ rawPath: change, kind: "modified" });
+      } else if (typeof change === "object" && change !== null) {
+        const rec = change as Record<string, unknown>;
+        const p =
+          rec.path ??
+          rec.file_path ??
+          rec.file ??
+          rec.filename ??
+          rec.target_file ??
+          rec.move_path;
+        if (typeof p === "string") {
+          const k = rec.kind ?? rec.action ?? rec.type ?? rec.change;
+          candidates.push({ rawPath: p, kind: k });
+        }
+      }
+    }
+  }
+
+  // 2. Check direct properties on item
+  const directPath =
+    item.path ??
+    item.file_path ??
+    item.file ??
+    item.filename ??
+    item.target_file ??
+    item.move_path;
+  if (typeof directPath === "string") {
+    const directKind = item.kind ?? item.action ?? item.type ?? item.change;
+    candidates.push({ rawPath: directPath, kind: directKind });
+  }
+
+  const valid: CodexFileChangeInfo[] = [];
+  const invalid: { rawPath: string; error: string }[] = [];
+
+  for (const candidate of candidates) {
+    const normalized = normalizeSafeWorkspacePath(candidate.rawPath, cwd);
+    if (normalized.ok) {
+      valid.push({
+        path: normalized.path,
+        change: parseChangeKind(candidate.kind),
+      });
+    } else {
+      invalid.push({ rawPath: candidate.rawPath, error: normalized.error });
+    }
+  }
+
+  return { valid, invalid };
+}
+
 export function describeItem(
   item: Record<string, unknown>,
+  cwd = process.cwd(),
 ): CodexItemContext | null {
   const type = typeof item.type === "string" ? item.type : "unknown";
   const id = typeof item.id === "string" ? item.id : type;
+
   if (type === "command_execution") {
     const raw = typeof item.command === "string" ? item.command : "";
     const first = (raw.split("\n")[0] ?? "").trim();
@@ -61,21 +143,52 @@ export function describeItem(
       filePath: null,
     };
   }
+
   if (type === "file_change") {
-    const path =
-      typeof item.path === "string"
-        ? item.path
-        : typeof item.file === "string"
-          ? item.file
-          : "file";
+    const { valid, invalid } = extractCodexFileChanges(item, cwd);
+    if (valid.length > 0) {
+      const primary = valid[0]!;
+      const paths = valid.map((v) => v.path);
+      const input =
+        paths.length === 1
+          ? { file_path: primary.path, path: primary.path }
+          : { file_path: primary.path, path: primary.path, files: paths };
+      const description =
+        paths.length === 1
+          ? `Edit: ${primary.path}`
+          : `Edit: ${paths.join(", ")}`;
+      return {
+        tool: "Edit",
+        input,
+        description,
+        command: null,
+        filePath: primary.path,
+        fileChanges: valid,
+        rejectedFilePaths: invalid,
+      };
+    }
+
+    const description =
+      invalid.length > 0
+        ? `Edit: rejected path (${invalid[0]!.rawPath})`
+        : "Edit: unknown file";
+    const input = {
+      error:
+        invalid.length > 0
+          ? invalid[0]!.error
+          : "No valid file path in event payload",
+    };
     return {
       tool: "Edit",
-      input: { file_path: path },
-      description: `Edit: ${path}`,
+      input,
+      description,
       command: null,
-      filePath: path,
+      filePath: null,
+      fileChanges: [],
+      rejectedFilePaths: invalid,
     };
   }
+
   if (type === "mcp_tool_call") {
     const tool =
       typeof item.tool === "string" && item.tool.length > 0 ? item.tool : "mcp";
@@ -87,6 +200,7 @@ export function describeItem(
       filePath: null,
     };
   }
+
   if (type === "web_search" || type === "todo_list") {
     return {
       tool: type === "web_search" ? "WebSearch" : "Todo",
@@ -97,9 +211,11 @@ export function describeItem(
       filePath: null,
     };
   }
+
   if (type === "agent_message" || type === "reasoning" || type === "error") {
     return null;
   }
+
   return {
     tool: type,
     input: item,
@@ -114,7 +230,8 @@ export function renderItemOutput(
   context: CodexItemContext,
 ): string {
   const result = asRecord(item.result);
-  const output = result?.output ?? item.output ?? item.text;
+  const output =
+    result?.output ?? item.output ?? item.aggregated_output ?? item.text;
   if (typeof output === "string" && output.length > 0) return output;
   if (output !== null && output !== undefined && typeof output !== "string") {
     const rendered = JSON.stringify(output);

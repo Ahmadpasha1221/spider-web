@@ -178,6 +178,13 @@ export interface AgentCommandFinishedEvent {
   readonly status: "succeeded" | "failed";
 }
 
+export interface AgentTestEvent {
+  readonly type: "test";
+  readonly name: string;
+  readonly status: "passed" | "failed" | "skipped" | "running" | "unknown";
+  readonly evidenceSource?: "transcript" | "adapter-derived";
+}
+
 export interface AgentErrorEvent {
   readonly type: "error";
   readonly message: string;
@@ -221,6 +228,7 @@ export type AgentEvent =
   | AgentFileChangedEvent
   | AgentCommandStartedEvent
   | AgentCommandFinishedEvent
+  | AgentTestEvent
   | AgentErrorEvent
   | AgentSessionCompletedEvent
   | AgentSessionFailedEvent

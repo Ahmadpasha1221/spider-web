@@ -467,6 +467,9 @@ function printAgentEvent(event: AgentEvent): void {
     case "file_changed":
       process.stdout.write(`File ${event.change}: ${event.path}\n`);
       break;
+    case "test":
+      process.stdout.write(`Test ${event.name}: ${event.status}\n`);
+      break;
     case "error":
       process.stderr.write(`Error [${event.kind}]: ${event.message}\n`);
       break;

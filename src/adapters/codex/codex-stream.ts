@@ -1,4 +1,5 @@
-﻿import type { Readable, Writable } from "node:stream";
+import type { Readable, Writable } from "node:stream";
+import { StringDecoder } from "node:string_decoder";
 import type { SessionRecorder } from "../agent-session.js";
 import { redactSecrets } from "./codex-redact.js";
 
@@ -7,9 +8,15 @@ export async function readJsonLines(
   onLine: (line: string) => Promise<void>,
 ): Promise<void> {
   if (stream === null) return;
+  const decoder = new StringDecoder("utf8");
   let buffer = "";
   for await (const chunk of stream) {
-    buffer += String(chunk);
+    buffer +=
+      typeof chunk === "string"
+        ? chunk
+        : decoder.write(
+            Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as ArrayBuffer),
+          );
     let index = buffer.indexOf("\n");
     while (index >= 0) {
       const line = buffer.slice(0, index);
@@ -18,6 +25,7 @@ export async function readJsonLines(
       index = buffer.indexOf("\n");
     }
   }
+  buffer += decoder.end();
   if (buffer.trim().length > 0) await onLine(buffer);
 }
 
@@ -26,10 +34,17 @@ export async function recordStderr(
   recorder: SessionRecorder,
 ): Promise<void> {
   if (stream === null) return;
+  const decoder = new StringDecoder("utf8");
   let buffer = "";
   for await (const chunk of stream) {
-    buffer += String(chunk);
+    buffer +=
+      typeof chunk === "string"
+        ? chunk
+        : decoder.write(
+            Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as ArrayBuffer),
+          );
   }
+  buffer += decoder.end();
   const text = buffer.trim();
   if (text.length > 0) {
     recorder.apply({
